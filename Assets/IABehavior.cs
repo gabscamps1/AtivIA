@@ -1,4 +1,5 @@
 using UnityEngine;
+using TMPro;
 
 // Maquina de Estados Finitos para um inimigo de tower defense.
 // Estados: Walk -> Retreat -> Die.
@@ -21,16 +22,22 @@ public class IABehavior : MonoBehaviour
     public int health = 1;
     public int fastSpeed = 4;
 
-    public float stunTimer = 0.4f;
-    public float stunDuration = 0.4f;
+    public float stunTimer = 0f;
+    public float stunDuration = 3f;
 
     private State currentState;
     private Rigidbody body;
     private float retreatTimer;
 
+    public TMP_Text enemyHealth;
+
+    public GameObject canvaObj;
+
     void Start()
     {
         body = GetComponent<Rigidbody>();
+
+        enemyHealth.text = "Vida: " + health.ToString();
 
         if (target == null)
         {
@@ -109,13 +116,15 @@ public class IABehavior : MonoBehaviour
         }
 
         //Vector3 direction = transform.position - target.transform.position;
-        //direction.y = 0f;
-        //body.linearVelocity = direction.normalized * 0;
+       //direction.y = 0f;
+        body.linearVelocity = new Vector3(0, 0, 0);
         stunTimer += Time.fixedDeltaTime;
 
         if (stunTimer >= stunDuration)
         {
-            //ChangeState(State.Walk);
+            //Debug.Log(stunTimer + "/" + stunDuration);
+            //Debug.Log("Voltando a andar.");
+            ChangeState(State.Walk);
         }
     }
 
@@ -134,12 +143,15 @@ public class IABehavior : MonoBehaviour
 
     void TickDie()
     {
+        Destroy(canvaObj);
         Destroy(gameObject);
     }
 
     public void TakeDamage(int damage)
     {
         health -= damage;
+
+        enemyHealth.text = "Vida: " + health.ToString();
 
         if (health > 1)
         {
