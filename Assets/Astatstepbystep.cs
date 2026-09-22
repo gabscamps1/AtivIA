@@ -2,16 +2,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+
 // A* usa G (custo real) + H (estimativa ao destino) para priorizar os nos.
-// Agora o G tambem soma um custo de radiacao, entao o algoritmo passa a
-// evitar celulas perigosas mesmo que isso signifique um caminho mais longo.
 public class AStarStepByStep : MonoBehaviour
 {
     private class Node
     {
         public int x, y;
         public int cost;
-        public int radiationCost; // 0 = seguro, 1-4 = risco baixo/medio, 5+ = perigoso
+        public int radiationCost; 
         public int g = int.MaxValue;
         public int h;
         public Node parent;
@@ -32,7 +31,7 @@ public class AStarStepByStep : MonoBehaviour
 
     [Header("Radiacao")]
     [SerializeField] private List<Transform> radiationSources = new List<Transform>();
-    [SerializeField] private int radiationRange = 4; // alcance em numero de nos (Manhattan)
+    [SerializeField] private int radiationRange = 4; 
     [SerializeField] private float radiationUpdateInterval = 0.5f;
     private float nextRadiationUpdateTime;
 
@@ -42,6 +41,8 @@ public class AStarStepByStep : MonoBehaviour
     private readonly List<Node> currentPath = new List<Node>();
     private Coroutine moveRoutine;
 
+    private Node currentTargetNode;
+
     private Node[,] nodes;
     private readonly List<Node> openNodes = new List<Node>();
     private Node targetNode;
@@ -50,9 +51,7 @@ public class AStarStepByStep : MonoBehaviour
     void Start()
     {
         CreateGrid();
-        // UpdateRadiationCosts() ja chama ResetSearch()+RunFullSearchAndMove()
-        // no final (RecalculatePathDueToRadiation). Chamar de novo aqui geraria
-        // uma segunda corrotina de movimento rodando junto com a primeira.
+
         UpdateRadiationCosts();
     }
 
@@ -103,14 +102,26 @@ public class AStarStepByStep : MonoBehaviour
                 nodes[x, y].state = State.None;
             }
 
-        // Se o jogador ja existe e ja se moveu, a busca deve recomecar de onde
-        // ele esta agora (nao do StartPoint original). Assim, quando a radiacao
-        // muda e a rota e recalculada, a capsula continua para frente em vez de
-        // ser puxada de volta ao ponto inicial da cena.
-        Vector3 startWorldPos = (player != null)
-            ? player.position
-            : (startPoint != null ? startPoint.position : transform.position);
-        Node start = WorldToNode(startWorldPos);
+        // Prioridade do no inicial da busca:
+        // 1) currentTargetNode: o no que o jogador ja esta indo em direcao a
+        //    (ou acabou de alcancar). Usar este em vez da posicao continua do
+        //    jogador evita que WorldToNode() (que arredonda para baixo) escolha
+        //    o no ANTERIOR quando o jogador esta no meio de uma celula -- isso
+        //    e o que causava a capsula "voltar" um passo a cada recalculo.
+        // 2) posicao atual do jogador, se ele ainda nao comecou a se mover.
+        // 3) StartPoint, como fallback inicial da cena.
+        Node start;
+        if (currentTargetNode != null)
+        {
+            start = currentTargetNode;
+        }
+        else
+        {
+            Vector3 startWorldPos = (player != null)
+                ? player.position
+                : (startPoint != null ? startPoint.position : transform.position);
+            start = WorldToNode(startWorldPos);
+        }
         targetNode = WorldToNode(targetPoint != null ? targetPoint.position : transform.position);
         if (start.cost == int.MaxValue || targetNode.cost == int.MaxValue)
         {
@@ -305,6 +316,11 @@ public class AStarStepByStep : MonoBehaviour
 
         foreach (Node node in path)
         {
+            // Marca este como o no "alvo atual" ANTES de comecar a andar ate ele.
+            // Se a rota for recalculada enquanto o jogador esta a caminho deste
+            // no, o proximo ResetSearch() vai usar exatamente ele como inicio
+            // -- nunca um no anterior -- entao o jogador so segue para frente.
+            currentTargetNode = node;
             Vector3 destination = NodeToWorld(node.x, node.y);
             while (Vector3.Distance(player.position, destination) > 0.05f)
             {
@@ -313,6 +329,10 @@ public class AStarStepByStep : MonoBehaviour
             }
         }
 
+        // Chegou ao fim do caminho: nao ha mais um "proximo no" para usar como
+        // ponto de partida, entao um recalculo futuro volta a usar a posicao
+        // atual do jogador.
+        currentTargetNode = null;
         moveRoutine = null;
     }
 
